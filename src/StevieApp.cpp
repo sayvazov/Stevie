@@ -27,7 +27,6 @@ private:
 
 void StevieApp::setup()
 {
-	myCam.lookAt(glm::vec3(0, -2 ,1), glm::vec3(0, 0, 0));
 	shader = gl::GlslProg::create(loadAsset("shader.vert"), loadAsset("shader.frag"));
 
 	gr = new ground(shader);
@@ -44,9 +43,9 @@ void StevieApp::update()
 {
 	if (spinning)
 	{
-		time += getElapsedSeconds() - lastTime;
-		vec3 eyePoint(cos(time) * 2, sin(time) * 2, 1);
-		myCam.lookAt(eyePoint, vec3(0, 0, 0));
+		time += (getElapsedSeconds() - lastTime);
+		vec3 eyePoint(cos(time/3.0f) * 2, sin(time / 3.0f) * 2, 1);
+		myCam.lookAt(eyePoint, vec3(0, 0, 0.5));
 		myCam.setWorldUp(vec3(0, 0, 1));
 	}
 	lastTime = getElapsedSeconds();
@@ -57,6 +56,7 @@ void StevieApp::draw()
 	gl::clear( Color( 0, 0, 0 ) ); 
 	gl::enableDepthRead();
 	gl::enableDepthWrite();
+	
 
 	gl::pushModelMatrix();
 

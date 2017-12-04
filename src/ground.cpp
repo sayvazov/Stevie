@@ -15,37 +15,49 @@ ground::~ground()
 
 void ground::setup()
 {
-	
+	//Some colors, to show off
 	groundSurface = Surface(256, 256, true);
 	for (int row = 0; row < groundSurface.getHeight(); row++)
 	{
 		for (int col = 0; col < groundSurface.getWidth(); col++)
 		{
-			groundSurface.setPixel(ivec2(col, row), ColorA8u(row, col, 128, 128));
+			groundSurface.setPixel(ivec2(col, row), ColorA8u(row, col, 128, 255));
 		}
 	}
-
 	groundTexture = gl::Texture::create(groundSurface);
-	groundTexture->bind(1);
-
-	Surface groundNormalSurface = algorithm::generatePerlin(16, 16);//algorithm::surfaceFromMatrix(*algorithm::createPerlinNoise(256, 16, 128));
-	groundNormalTexture = gl::Texture::create(groundNormalSurface);
-	groundNormalTexture->bind(0);
-
+	groundTexture->bind(0);
 	groundShader->uniform("diffuseMap", 0);
-	groundShader->uniform("normalMap", 1);
-	groundShader->uniform("ciLightDir", vec3(1, 1, 1));
 
-	groundPlane = geom::Plane().normal(vec3(0, 0, 1)).origin(vec3(0, 0, 0));
-	groundBatch = ci::gl::Batch::create(groundPlane, groundShader);
+	groundShader->uniform("ciLightDir", vec3(1, 1, 1.0));
 
+	//make some hills
+	std::unique_ptr<algorithm::matrix<float>>perlin = algorithm::createPerlinNoise(256, 7, 0.4);
+	geom::Plane groundPlane = geom::Plane()
+		.normal(vec3(0, 0, 1))
+		.origin(vec3(0, 0, 0))
+		.subdivisions(glm::ivec2(256, 256))
+		.size(glm::vec2(10, 10));
+	groundMesh = gl::VboMesh::create(groundPlane);
+
+	//Transfer hills into VBOmesh
+	auto mappedPosAttrib = groundMesh->mapAttrib3f(geom::Attrib::POSITION, false);
+	for (int i = 0; i < 256; i++)
+	{
+		for (int j = 0; j < 256; j++)
+		{
+			vec3 &pos = *mappedPosAttrib;
+			mappedPosAttrib->z = perlin->at(i)[j];
+			++mappedPosAttrib;
+		}
+	}
+	mappedPosAttrib.unmap();
 }
 
 void ground::draw()
 {
+	
 	gl::pushModelMatrix();
-	//groundTexture->bind();
-	groundBatch->draw();
-	//groundTexture->unbind();
+	groundShader->bind();
+	gl::draw(groundMesh);
 	gl::popModelMatrix();
 }

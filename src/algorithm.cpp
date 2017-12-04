@@ -7,7 +7,7 @@ using namespace algorithm;
 namespace {
 	float S(float x)
 	{
-		//return (x*x*x*-2) + (x*x * 3);
+		return (x*x*x*-2) + (x*x * 3);
 		return x;
 		/*
 		x = 1 / (x - 1.001) - 1 / (x+0.001);
@@ -41,85 +41,63 @@ std::unique_ptr<matrix<T>> algorithm::createBlank(int size, T def)
 	return result;
 }
 
-bool algorithm::createPerlinNoise(matrix<float> & target, int nodeSize, float magnitude)
+inline int whichSection( int sectionSize, int sectionsWithExtraElem, int elemNumber)
 {
-	int squareSize = target.size();
-	int height = target[0].size();
-	if (squareSize != height)
-		return false;
-	if (nodeSize > squareSize)
-		return false;
-
-
-	int step = squareSize / nodeSize + 1;
-	
-	//Generate a random unit length vector for each node
-	matrix<glm::vec2> nodes;
-	nodes.resize(nodeSize+1);
-
-	for (int x = 0; x <= nodeSize; x++)
-	{
-		nodes[x].resize(nodeSize+1);
-		for (int y = 0; y <= nodeSize; y++)
-		{
-			nodes[x][y] = glm::circularRand(1.0);
-		}
-	}
-
-	for (int x = 0; x < squareSize; x++)
-	{
-		int prevXNode = x / step;
-		float xFraction = (float)(x % step) / step;
-		for (int y = 0; y < squareSize; y++)
-		{
-
-			int prevYNode = y / step;
-			float yFraction = (float)(y % step) / step;
-
-			float total = 0;
-			glm::vec2 distance(xFraction, yFraction);
-			total += glm::dot(distance, nodes[prevXNode][prevYNode])*S(1 - xFraction)*S(1 - yFraction);
-
-			distance = glm::vec2(1 - xFraction, yFraction);
-			total += glm::dot(distance, nodes[prevXNode + 1][prevYNode]) * S(xFraction)*S(1 - yFraction);
-
-			distance = glm::vec2(xFraction, 1 - yFraction);
-			total += glm::dot(distance, nodes[prevXNode][prevYNode + 1]) * S(1 - xFraction)*S(yFraction);
-
-			distance = glm::vec2(1 - xFraction, 1 - yFraction);
-			total += glm::dot(distance, nodes[prevXNode + 1][prevYNode + 1]) * S(xFraction)*S(yFraction);
-
-			target[x][y] += magnitude*total;
-		}
-	}
-	return true;
+	int naive = elemNumber / (sectionSize + 1);
+	if (naive < sectionsWithExtraElem)
+		return naive;
+	return (elemNumber - sectionsWithExtraElem) / sectionSize;
 }
 
-std::unique_ptr<matrix<glm::vec3>> algorithm::createPerlinSurface(int squareSize, int nodeSize, float magnitude)
+std::unique_ptr<matrix<float>> algorithm::createPerlinNoise(int squareSize, int numNodes, float magnitude, float center)
 {
-	std::unique_ptr<matrix<glm::vec3>> result = createBlank<glm::vec3>(squareSize);
-	std::unique_ptr<matrix<float>> perlin = createBlank<float>(squareSize, 128);
-	createPerlinNoise(perlin, nodeSize, magnitude);
-
-
-	int step = squareSize / nodeSize + 1;
-
-	//Generate a random unit length vector for each node
-	matrix<glm::vec2> nodes;
-	nodes.resize(nodeSize + 1);
-
-	for (int x = 0; x <= nodeSize; x++)
+	std::unique_ptr<matrix<float>> result = algorithm::createBlank(squareSize, center);
+	matrix<glm::vec2> nodes = *algorithm::createBlank<glm::vec2>(numNodes+1);
+	for (int i = 0; i <= numNodes; i++)
 	{
-		nodes[x].resize(nodeSize + 1);
-		for (int y = 0; y <= nodeSize; y++)
+		for (int j = 0; j <= numNodes; j++)
 		{
-			nodes[x][y] = glm::circularRand(1.0);
+			nodes[i][j] = glm::circularRand(1.0f);
 		}
 	}
+	
+	int nodeSize = squareSize / numNodes;
+	int nodesWithExtraElem = squareSize % numNodes;
+	float distanceBetweenNodes = 1.0 / numNodes;
+	float distanceBetweenVerts = 1.0 / squareSize;
+	for (int i = 0; i < squareSize; i++)
+	{
+		int iNode = whichSection(nodeSize, nodesWithExtraElem, i);
+		float iFrac = i*distanceBetweenVerts / distanceBetweenNodes - iNode;
+		for (int j = 0; j < squareSize; j++)
+		{
+			int jNode = whichSection(nodeSize, nodesWithExtraElem, j);
+			float jFrac = (j*distanceBetweenVerts / distanceBetweenNodes - jNode);
 
+			glm::vec2 distance;
+			float total = 0 ;
+
+			if (jFrac > 0.1f && iFrac > 0.1f)
+				jFrac *= 1.0001;
+
+			distance = glm::vec2(iFrac, jFrac);
+			total += glm::dot(distance, nodes[iNode][jNode]) * S(1-iFrac)*S(1-jFrac);
+
+			distance = glm::vec2(iFrac-1, jFrac);
+			total += glm::dot(distance, nodes[iNode+1][jNode]) * S(iFrac)*S(1-jFrac);
+
+			distance = glm::vec2(iFrac, jFrac-1);
+			total += glm::dot(distance, nodes[iNode][jNode+1]) * S(1-iFrac)*S(jFrac);
+
+			distance = glm::vec2(iFrac-1, jFrac-1);
+			total += glm::dot(distance, nodes[iNode+1][jNode+1]) * S(iFrac)*S(jFrac);
+
+			total = glm::min(glm::max(-1.0f, total), 0.9f);
+			result->at(i)[j] += total*magnitude;
+		}
+	}
 	return result;
 }
-
 
 ci::Surface algorithm::surfaceFromMatrix(matrix<float>& input)
 {
@@ -130,7 +108,42 @@ ci::Surface algorithm::surfaceFromMatrix(matrix<float>& input)
 	{
 		for (int y = 0; y < width; y++)
 		{
-			ci::ColorA8u pixel(input[x][y], input[x][y], input[x][y], 255);
+			int val = (int)input[x][y];
+			
+			ci::ColorA8u pixel(val, val, val, 255);
+			result.setPixel(glm::ivec2(x, y), pixel);
+		}
+	}
+	return result;
+}
+
+// Assumes input on 
+ci::Surface algorithm::normalSurfaceFromMatrix(matrix<float>& input)
+{
+	int width = input.size();
+	int height = input[0].size();
+	ci::Surface result = ci::Surface(width, height, true);
+	for (int x = 1; x < width-1; x++)
+	{
+		for (int y = 1; y < width-1; y++)
+		{
+			float xPrev = input[x - 1][y];
+			float yPrev = input[x][y - 1];
+			float val   = input[x][y];
+			float xNext = input[x + 1][y];
+			float yNext = input[x][y + 1];
+
+			glm::mat3 lin(1, -1, 1, 0, 0, 1, 1, 1, 1);
+			glm::mat3 inv = glm::inverse(lin);
+			glm::vec3 ySolve = glm::vec3(yPrev, val, yNext) * inv;
+			glm::vec3 xSolve = glm::vec3(xPrev, val, xNext) * inv;
+			float ySlope = ySolve.y * 128;
+			float xSlope = xSolve.y*128;
+			glm::vec3 normal(xSlope, ySlope, 1.0);
+			glm::vec3 normalNormalized = glm::normalize(normal)*128.0f + 128.0f;
+
+
+			ci::ColorA8u pixel(normalNormalized.x, normalNormalized.y, normalNormalized.z, 255);
 			result.setPixel(glm::ivec2(x, y), pixel);
 		}
 	}

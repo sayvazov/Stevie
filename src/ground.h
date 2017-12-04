@@ -17,7 +17,7 @@ public:
 private:
 	gl::BatchRef groundBatch;
 	gl::GlslProgRef groundShader;
-	geom::Plane groundPlane;
+	gl::VboMeshRef groundMesh;
 	Surface groundSurface;
 	gl::TextureRef groundTexture;
 	gl::TextureRef groundNormalTexture;
